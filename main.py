@@ -23,6 +23,7 @@ class ItemModel(Base):
     name = Column(String,index=True)
     price = Column(Integer)
     is_offer = Column(Boolean, default=False)
+    ai_comment = Column(String)
     
 Base.metadata.create_all(bind=engine)
 
@@ -36,10 +37,14 @@ class ItemResponse(ItemCreate):
     ai_comment: str = None
     
     class Config:
-        orm_mode = True
+        from_attributes = True
         
         
-app = FastAPI()
+app = FastAPI(
+    title="AI Product Manager",
+    description="商品登録時にAIが自動でキャッチコピーを生成する在庫管理API",
+    version="1.0.0"
+)
 
 load_dotenv()
 
@@ -62,7 +67,7 @@ def create_item(item: ItemCreate, db: Session = Depends(get_db)):
     
     # AI処理
     try:
-        prompt = f"{item.name}というタスク登録するからそれに対してのコメントをテンション高めの関西弁で短めにお願い"
+        prompt = f"「{item.name}」という商品が登録されました．価格は{item.price}円です．この商品の魅力を関西弁で30字以内で考えてください"
         response = model.generate_content(prompt)
         ai_comment = response.text
     except Exception as e:
@@ -70,12 +75,11 @@ def create_item(item: ItemCreate, db: Session = Depends(get_db)):
         
         
         
-    db_item = ItemModel(name=item.name, price=item.price, is_offer=item.is_offer)
+    db_item = ItemModel(name=item.name, price=item.price, is_offer=item.is_offer, ai_comment=ai_comment)
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
     
-    db_item.ai_comment = ai_comment
     return db_item
 
 @app.get("/items/", response_model=list[ItemResponse])
